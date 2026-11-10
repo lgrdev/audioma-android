@@ -16,13 +16,31 @@ android {
         versionName = "1.0"
     }
 
+    // Clé de release lue depuis ~/.gradle/gradle.properties (hors dépôt) :
+    // AUDIOMA_STORE_FILE, AUDIOMA_STORE_PASSWORD, AUDIOMA_KEY_ALIAS, AUDIOMA_KEY_PASSWORD
+    val releaseStoreFile = providers.gradleProperty("AUDIOMA_STORE_FILE").orNull
+    signingConfigs {
+        if (releaseStoreFile != null) {
+            create("release") {
+                storeFile = file(releaseStoreFile)
+                storePassword = providers.gradleProperty("AUDIOMA_STORE_PASSWORD").get()
+                keyAlias = providers.gradleProperty("AUDIOMA_KEY_ALIAS").get()
+                keyPassword = providers.gradleProperty("AUDIOMA_KEY_PASSWORD").get()
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
-            // Signé avec la clé debug pour pouvoir installer l'APK directement.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (releaseStoreFile != null) {
+                signingConfigs.getByName("release")
+            } else {
+                logger.warn("AUDIOMA_STORE_FILE absent : APK release signé avec la clé de debug.")
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
