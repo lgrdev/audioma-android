@@ -27,7 +27,7 @@ Formats pris en charge : MP3, M4A, AAC, FLAC, OGG, Opus, WAV, etc.
 
 ## Installation
 
-1. Télécharge le fichier `audioma-1.0.apk` depuis la [dernière version](https://github.com/lgrdev/audioma-android/releases/latest).
+1. Télécharge le fichier `audioma-x.y.apk` depuis la [dernière version](https://github.com/lgrdev/audioma-android/releases/latest).
 2. Ouvre-le sur ton téléphone et autorise l'installation depuis cette source si Android le demande.
 
 Compatible Android 8.0 et plus récent.

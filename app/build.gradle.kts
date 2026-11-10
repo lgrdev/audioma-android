@@ -12,8 +12,8 @@ android {
         applicationId = "app.audioma"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
 
     // Clé de release lue depuis ~/.gradle/gradle.properties (hors dépôt) :
