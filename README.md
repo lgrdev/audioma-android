@@ -8,7 +8,7 @@ Tu choisis un dossier, Audioma joue ta musique. C'est tout.
 
 La plupart des lecteurs audio gratuits sont remplis de publicités, de bannières, d'achats intégrés et d'écrans inutiles. Audioma fait le contraire :
 
-- **Gratuit.** Pas de version premium, pas d'achat intégré, pas d'abonnement.
+- **Gratuit et libre.** Code source ouvert sous licence MIT. Pas de version premium, pas d'achat intégré, pas d'abonnement.
 - **Zéro publicité.** Aucune bannière, aucune vidéo, aucun pop-up. Jamais.
 - **Simple.** Un seul écran : la liste de tes morceaux et un lecteur. Rien à configurer à part le dossier.
 - **Respect de la vie privée.** Aucun compte, aucun pistage, aucune statistique. L'appli ne demande même pas l'accès à Internet : rien ne sort de ton téléphone.
@@ -27,7 +27,7 @@ Formats pris en charge : MP3, M4A, AAC, FLAC, OGG, Opus, WAV, etc.
 
 ## Installation
 
-1. Télécharge le fichier `app-release.apk`.
+1. Télécharge le fichier `audioma-1.0.apk` depuis la [dernière version](https://github.com/lgrdev/audioma-android/releases/latest).
 2. Ouvre-le sur ton téléphone et autorise l'installation depuis cette source si Android le demande.
 
 Compatible Android 8.0 et plus récent.
@@ -48,3 +48,7 @@ L'APK est généré dans `app/build/outputs/apk/release/app-release.apk`.
 ## Technique
 
 Kotlin, Jetpack Compose et Media3 (ExoPlayer). Le dossier est choisi via le sélecteur système d'Android : l'appli n'a pas besoin de l'autorisation d'accès à tout le stockage.
+
+## Licence
+
+[MIT](LICENSE) : libre d'utiliser, modifier et redistribuer.
