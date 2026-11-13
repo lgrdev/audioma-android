@@ -16,6 +16,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_SHUFFLE, false)
         set(value) = sp.edit { putBoolean(KEY_SHUFFLE, value) }
 
+    /** Player.REPEAT_MODE_OFF / ONE / ALL. Par défaut : pas de relecture. */
+    var repeatMode: Int
+        get() = sp.getInt(KEY_REPEAT, 0)
+        set(value) = sp.edit { putInt(KEY_REPEAT, value) }
+
     val lastMediaId: String? get() = sp.getString(KEY_LAST_ID, null)
     val lastPositionMs: Long get() = sp.getLong(KEY_LAST_POS, 0L)
 
@@ -27,6 +32,7 @@ class Prefs(context: Context) {
     private companion object {
         const val KEY_FOLDER = "folder"
         const val KEY_SHUFFLE = "shuffle"
+        const val KEY_REPEAT = "repeat"
         const val KEY_LAST_ID = "last_id"
         const val KEY_LAST_POS = "last_pos"
     }

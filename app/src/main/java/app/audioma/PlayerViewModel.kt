@@ -27,6 +27,7 @@ data class UiState(
     val currentIndex: Int = C.INDEX_UNSET,
     val isPlaying: Boolean = false,
     val shuffle: Boolean = false,
+    val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val durationMs: Long = 0L,
 ) {
     val current: Track? get() = tracks.getOrNull(currentIndex)
@@ -35,7 +36,7 @@ data class UiState(
 class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     private val prefs = Prefs(app)
-    private val _state = MutableStateFlow(UiState(shuffle = prefs.shuffle))
+    private val _state = MutableStateFlow(UiState(shuffle = prefs.shuffle, repeatMode = prefs.repeatMode))
     val state: StateFlow<UiState> = _state
 
     private var controller: MediaController? = null
@@ -133,6 +134,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 currentIndex = if (c.mediaItemCount == it.tracks.size) c.currentMediaItemIndex else C.INDEX_UNSET,
                 isPlaying = c.isPlaying,
                 shuffle = c.shuffleModeEnabled,
+                repeatMode = c.repeatMode,
                 durationMs = c.duration.takeIf { d -> d != C.TIME_UNSET } ?: 0L,
             )
         }
@@ -149,8 +151,23 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun togglePlay() {
         val c = controller ?: return
         if (c.isPlaying) c.pause() else {
-            if (c.playbackState == Player.STATE_IDLE) c.prepare()
+            when (c.playbackState) {
+                Player.STATE_IDLE -> c.prepare()
+                // Fin de liste sans relecture : on repart du premier morceau.
+                Player.STATE_ENDED -> c.seekToDefaultPosition(c.currentTimeline.getFirstWindowIndex(c.shuffleModeEnabled))
+                else -> Unit
+            }
             c.play()
+        }
+    }
+
+    /** Pas de relecture → morceau en boucle → playlist en boucle → pas de relecture. */
+    fun cycleRepeat() {
+        val c = controller ?: return
+        c.repeatMode = when (c.repeatMode) {
+            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
+            Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_ALL
+            else -> Player.REPEAT_MODE_OFF
         }
     }
 

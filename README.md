@@ -17,7 +17,7 @@ La plupart des lecteurs audio gratuits sont remplis de publicités, de bannière
 ## Fonctionnalités
 
 - 📁 **Dossier au choix** : tu choisis un dossier une fois, les sous-dossiers sont inclus automatiquement.
-- 🔁 **Lecture continue** : à la fin de la liste, la lecture reprend au début.
+- 🔁 **Relecture** : un bouton pour choisir entre pas de relecture, le morceau en boucle ou toute la playlist en boucle.
 - 🔀 **Lecture aléatoire** : un nouveau mélange à chaque tour, sans répéter un morceau avant que les autres soient passés.
 - 🌙 **Lecture en arrière-plan** : la musique continue écran éteint, avec les commandes dans la notification, sur l'écran de verrouillage et sur les appareils Bluetooth.
 - ⏯️ **Reprise automatique** : Audioma se souvient du dernier morceau, de la position et du mode aléatoire.

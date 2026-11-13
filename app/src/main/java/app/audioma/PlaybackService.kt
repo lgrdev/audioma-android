@@ -52,7 +52,7 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true) // pause si on débranche le casque
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
-        player.repeatMode = Player.REPEAT_MODE_ALL // lecture continue en boucle
+        player.repeatMode = prefs.repeatMode // aucune, morceau ou playlist en boucle
         player.addListener(listener)
 
         val openApp = PendingIntent.getActivity(
@@ -114,6 +114,10 @@ class PlaybackService : MediaSessionService() {
             if (shuffleModeEnabled) reshuffle()
         }
 
+        override fun onRepeatModeChanged(repeatMode: Int) {
+            prefs.repeatMode = repeatMode
+        }
+
         override fun onTimelineChanged(timeline: Timeline, reason: Int) {
             // Nouvelle liste chargée en mode aléatoire : mélange à partir de la piste courante.
             if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED &&
@@ -123,7 +127,7 @@ class PlaybackService : MediaSessionService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             val timeline = player.currentTimeline
-            // Fin de liste atteinte en aléatoire : on remélange pour le tour suivant.
+            // Fin de liste atteinte en aléatoire (playlist en boucle) : on remélange pour le tour suivant.
             if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO &&
                 player.shuffleModeEnabled && !timeline.isEmpty &&
                 previousIndex == timeline.getLastWindowIndex(true)

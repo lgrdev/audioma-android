@@ -60,6 +60,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.media3.common.Player
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
@@ -267,8 +268,25 @@ private fun PlayerBar(state: UiState, vm: PlayerViewModel) {
                 IconButton(onClick = { vm.next() }) {
                     Icon(painterResource(R.drawable.ic_skip_next), contentDescription = "Suivant")
                 }
-                // Espace symétrique au bouton aléatoire pour centrer lecture/pause.
-                Spacer(Modifier.size(48.dp))
+                val repeatOn = state.repeatMode != Player.REPEAT_MODE_OFF
+                IconButton(
+                    onClick = vm::cycleRepeat,
+                    colors = IconButtonDefaults.iconButtonColors(
+                        contentColor = if (repeatOn) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    ),
+                ) {
+                    Icon(
+                        painterResource(
+                            if (state.repeatMode == Player.REPEAT_MODE_ONE) R.drawable.ic_repeat_one else R.drawable.ic_repeat
+                        ),
+                        contentDescription = when (state.repeatMode) {
+                            Player.REPEAT_MODE_ONE -> "Relecture du morceau"
+                            Player.REPEAT_MODE_ALL -> "Relecture de la playlist"
+                            else -> "Pas de relecture"
+                        },
+                    )
+                }
             }
         }
     }
