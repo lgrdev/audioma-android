@@ -16,6 +16,7 @@ La plupart des lecteurs audio gratuits sont remplis de publicités, de bannière
 
 ## Fonctionnalités
 
+- 🎨 **Interface sombre et lisible** : morceaux groupés par sous-dossier, mini-lecteur en bas de la liste, lecteur plein écran avec le morceau suivant.
 - 📁 **Dossier au choix** : tu choisis un dossier une fois, les sous-dossiers sont inclus automatiquement.
 - 🔁 **Relecture** : un bouton pour choisir entre pas de relecture, le morceau en boucle ou toute la playlist en boucle.
 - 🔀 **Lecture aléatoire** : un nouveau mélange à chaque tour, sans répéter un morceau avant que les autres soient passés.
