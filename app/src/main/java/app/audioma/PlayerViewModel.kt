@@ -29,8 +29,11 @@ data class UiState(
     val shuffle: Boolean = false,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val durationMs: Long = 0L,
+    /** Piste suivante selon l'ordre de lecture (aléatoire et relecture compris). */
+    val nextIndex: Int = C.INDEX_UNSET,
 ) {
     val current: Track? get() = tracks.getOrNull(currentIndex)
+    val next: Track? get() = tracks.getOrNull(nextIndex)
 }
 
 class PlayerViewModel(app: Application) : AndroidViewModel(app) {
@@ -130,8 +133,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private fun syncFromPlayer() {
         val c = controller ?: return
         _state.update {
+            val inSync = c.mediaItemCount == it.tracks.size
             it.copy(
-                currentIndex = if (c.mediaItemCount == it.tracks.size) c.currentMediaItemIndex else C.INDEX_UNSET,
+                currentIndex = if (inSync) c.currentMediaItemIndex else C.INDEX_UNSET,
+                nextIndex = if (inSync) c.nextMediaItemIndex else C.INDEX_UNSET,
                 isPlaying = c.isPlaying,
                 shuffle = c.shuffleModeEnabled,
                 repeatMode = c.repeatMode,

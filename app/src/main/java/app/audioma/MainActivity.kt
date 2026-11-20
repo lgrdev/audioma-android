@@ -1,66 +1,88 @@
 package app.audioma
 
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.StartOffset
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableLongState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.media3.common.Player
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
@@ -68,88 +90,202 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Thème toujours sombre : icônes claires dans les barres système.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
         setContent {
-            AppTheme { PlayerScreen(vm) }
+            AppTheme { AppRoot(vm) }
         }
     }
 }
 
 @Composable
-private fun AppTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
-    val context = LocalContext.current
-    val colors = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        dark -> darkColorScheme()
-        else -> lightColorScheme()
-    }
-    MaterialTheme(colorScheme = colors, content = content)
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun PlayerScreen(vm: PlayerViewModel) {
+private fun AppRoot(vm: PlayerViewModel) {
     val state by vm.state.collectAsStateWithLifecycle()
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let(vm::onFolderPicked)
     }
+    val position = rememberPlaybackPosition(state, vm)
+    var playerRequested by rememberSaveable { mutableStateOf(false) }
+    val playerOpen = playerRequested && state.current != null
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(state.folderName ?: "Audioma", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (state.tracks.isNotEmpty()) {
-                            Text(
-                                "${state.tracks.size} pistes",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                },
-                actions = {
-                    if (state.folderName != null) {
-                        IconButton(onClick = vm::rescan) {
-                            Icon(painterResource(R.drawable.ic_refresh), contentDescription = "Relire le dossier")
-                        }
-                    }
-                    IconButton(onClick = { pickFolder.launch(null) }) {
-                        Icon(painterResource(R.drawable.ic_folder), contentDescription = "Choisir le dossier")
-                    }
-                },
+    BackHandler(enabled = playerOpen) { playerRequested = false }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Nocturne.Background)
+    ) {
+        if (state.folderName == null && !state.scanning) {
+            Onboarding(onPickFolder = { pickFolder.launch(null) })
+        } else {
+            Library(
+                state = state,
+                position = position.longValue,
+                vm = vm,
+                onPickFolder = { pickFolder.launch(null) },
+                onOpenPlayer = { playerRequested = true },
             )
-        },
-        bottomBar = {
-            if (state.tracks.isNotEmpty()) PlayerBar(state, vm)
-        },
-    ) { padding ->
-        Box(
+        }
+
+        AnimatedVisibility(
+            visible = playerOpen,
+            enter = slideInVertically { it / 3 } + fadeIn(),
+            exit = slideOutVertically { it / 3 } + fadeOut(),
+        ) {
+            NowPlaying(
+                state = state,
+                position = position.longValue,
+                folderName = state.folderName,
+                vm = vm,
+                onSeek = { target ->
+                    vm.seekTo(target)
+                    position.longValue = target
+                },
+                onClose = { playerRequested = false },
+            )
+        }
+    }
+}
+
+/** Position de lecture, rafraîchie deux fois par seconde pendant la lecture. */
+@Composable
+private fun rememberPlaybackPosition(state: UiState, vm: PlayerViewModel): MutableLongState {
+    val position = remember { mutableLongStateOf(0L) }
+    LaunchedEffect(state.isPlaying, state.currentIndex) {
+        while (true) {
+            position.longValue = vm.positionMs()
+            if (!state.isPlaying) break
+            delay(500)
+        }
+    }
+    return position
+}
+
+// ---------------------------------------------------------------------------
+// Bibliothèque
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun Library(
+    state: UiState,
+    position: Long,
+    vm: PlayerViewModel,
+    onPickFolder: () -> Unit,
+    onOpenPlayer: () -> Unit,
+) {
+    Box(Modifier.fillMaxSize()) {
+        Column(
             Modifier
                 .fillMaxSize()
-                .padding(padding),
-            contentAlignment = Alignment.Center,
+                .statusBarsPadding()
         ) {
-            when {
-                state.scanning -> CircularProgressIndicator()
-                state.error != null -> Message(state.error!!, "Choisir un autre dossier") { pickFolder.launch(null) }
-                state.folderName == null -> Message("Aucun dossier choisi", "Choisir un dossier") { pickFolder.launch(null) }
-                state.tracks.isEmpty() -> Message("Aucun fichier audio dans ce dossier", "Choisir un autre dossier") { pickFolder.launch(null) }
-                else -> TrackList(state, onClick = vm::playAt)
+            LibraryHeader(state, vm, onPickFolder)
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                when {
+                    state.scanning -> CircularProgressIndicator(color = Nocturne.Accent)
+                    state.error != null -> Message(state.error, "Choisir un autre dossier", onPickFolder)
+                    state.tracks.isEmpty() -> Message("Aucun fichier audio dans ce dossier", "Choisir un autre dossier", onPickFolder)
+                    else -> TrackList(state, onClick = vm::playAt)
+                }
             }
+        }
+        if (state.current != null && !state.scanning) {
+            MiniPlayer(
+                state = state,
+                position = position,
+                onOpen = onOpenPlayer,
+                onTogglePlay = vm::togglePlay,
+                onNext = { vm.next() },
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
         }
     }
 }
 
 @Composable
-private fun Message(text: String, action: String, onAction: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
-        Text(text, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge)
-        Spacer(Modifier.height(16.dp))
-        Button(onClick = onAction) { Text(action) }
+private fun BrandLabel(modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Icon(painterResource(R.drawable.ic_music_note), contentDescription = null, tint = Nocturne.Muted, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("AUDIOMA", style = MaterialTheme.typography.labelMedium, color = Nocturne.Muted)
+    }
+}
+
+@Composable
+private fun LibraryHeader(state: UiState, vm: PlayerViewModel, onPickFolder: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BrandLabel(Modifier.weight(1f))
+            IconButton(onClick = vm::rescan) {
+                Icon(painterResource(R.drawable.ic_refresh), contentDescription = "Relire le dossier", tint = Nocturne.TextSoft)
+            }
+            FilledIconButton(
+                onClick = onPickFolder,
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = Nocturne.Surface,
+                    contentColor = Nocturne.TextSoft,
+                ),
+            ) {
+                Icon(painterResource(R.drawable.ic_folder), contentDescription = "Choisir le dossier")
+            }
+        }
+        Column(Modifier.padding(end = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                state.folderName ?: "Audioma",
+                style = MaterialTheme.typography.displaySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (state.tracks.isNotEmpty()) {
+                Text(librarySummary(state.tracks), style = MaterialTheme.typography.bodyMedium, color = Nocturne.Muted)
+            }
+        }
+        if (state.tracks.isNotEmpty()) {
+            ShuffleChip(on = state.shuffle, onToggle = vm::toggleShuffle)
+        }
+    }
+}
+
+private fun librarySummary(tracks: List<Track>): String {
+    val n = tracks.size
+    val folders = tracks.distinctBy { it.folder }.size
+    val pistes = if (n > 1) "$n pistes" else "$n piste"
+    return if (folders > 1) "$pistes · $folders dossiers" else pistes
+}
+
+@Composable
+private fun ShuffleChip(on: Boolean, onToggle: () -> Unit) {
+    Surface(
+        checked = on,
+        onCheckedChange = { onToggle() },
+        shape = CircleShape,
+        color = if (on) Nocturne.Accent else Color.Transparent,
+        contentColor = if (on) Nocturne.OnAccent else Nocturne.TextSoft,
+        border = if (on) null else BorderStroke(1.dp, Nocturne.Track),
+    ) {
+        Row(
+            Modifier
+                .height(40.dp)
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(painterResource(R.drawable.ic_shuffle), contentDescription = null, modifier = Modifier.size(18.dp))
+            Text("Aléatoire", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        }
     }
 }
 
@@ -163,30 +299,178 @@ private fun TrackList(state: UiState, onClick: (Int) -> Unit) {
         val visible = listState.layoutInfo.visibleItemsInfo
         if (visible.none { it.index == i }) listState.scrollToItem((i - 2).coerceAtLeast(0))
     }
-    LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 4.dp)) {
+    val grouped = remember(state.tracks) { state.tracks.distinctBy { it.folder }.size > 1 }
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        // Laisse la dernière piste visible au-dessus du mini-lecteur.
+        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 120.dp),
+    ) {
         itemsIndexed(state.tracks, key = { _, t -> t.id }) { index, track ->
-            val isCurrent = index == state.currentIndex
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clickable { onClick(index) }
-                    .background(if (isCurrent) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
-            ) {
-                Text(
-                    track.title,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                )
-                if (track.folder.isNotEmpty()) {
+            Column {
+                if (grouped && (index == 0 || state.tracks[index - 1].folder != track.folder)) {
                     Text(
-                        track.folder,
+                        track.folder.ifEmpty { state.folderName.orEmpty() }.uppercase(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Nocturne.Muted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 18.dp, bottom = 6.dp),
                     )
+                }
+                TrackRow(
+                    track = track,
+                    isCurrent = index == state.currentIndex,
+                    isPlaying = state.isPlaying,
+                    onClick = { onClick(index) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrackRow(track: Track, isCurrent: Boolean, isPlaying: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (isCurrent) Nocturne.Selected else Color.Transparent)
+            .clickable(onClick = onClick)
+            .semantics { selected = isCurrent }
+            .heightIn(min = 60.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        FolderTile(track.folder, size = 44.dp, corner = 10.dp) { glyph ->
+            if (isCurrent) EqualizerBars(animated = isPlaying, color = glyph)
+            else Icon(painterResource(R.drawable.ic_music_note), contentDescription = null, tint = glyph, modifier = Modifier.size(20.dp))
+        }
+        Text(
+            track.title,
+            fontSize = 15.sp,
+            fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Medium,
+            color = if (isCurrent) Nocturne.Accent else Nocturne.Text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/** Vignette carrée colorée selon le sous-dossier ; [content] reçoit la couleur du pictogramme. */
+@Composable
+fun FolderTile(folder: String, size: Dp, corner: Dp, content: @Composable (Color) -> Unit) {
+    val tint = folderTint(folder)
+    Box(
+        Modifier
+            .size(size)
+            .clip(RoundedCornerShape(corner))
+            .background(tint.background),
+        contentAlignment = Alignment.Center,
+    ) { content(tint.glyph) }
+}
+
+@Composable
+private fun EqualizerBars(animated: Boolean, color: Color) {
+    Row(
+        Modifier.height(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        if (animated) {
+            val transition = rememberInfiniteTransition(label = "eq")
+            listOf(0, 300, 600).forEach { offset ->
+                val h by transition.animateFloat(
+                    initialValue = 5f,
+                    targetValue = 16f,
+                    animationSpec = infiniteRepeatable(
+                        tween(450, easing = FastOutSlowInEasing),
+                        RepeatMode.Reverse,
+                        initialStartOffset = StartOffset(offset),
+                    ),
+                    label = "bar",
+                )
+                Bar(h.dp, color)
+            }
+        } else {
+            listOf(6.dp, 11.dp, 8.dp).forEach { Bar(it, color) }
+        }
+    }
+}
+
+@Composable
+private fun Bar(height: Dp, color: Color) {
+    Box(
+        Modifier
+            .width(3.dp)
+            .height(height)
+            .clip(RoundedCornerShape(2.dp))
+            .background(color)
+    )
+}
+
+@Composable
+private fun MiniPlayer(
+    state: UiState,
+    position: Long,
+    onOpen: () -> Unit,
+    onTogglePlay: () -> Unit,
+    onNext: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val track = state.current ?: return
+    val progress = if (state.durationMs > 0) (position.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f
+    Surface(
+        modifier = modifier
+            .navigationBarsPadding()
+            .padding(start = 10.dp, end = 10.dp, bottom = 12.dp)
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        color = Nocturne.SurfaceHigh,
+        shadowElevation = 12.dp,
+    ) {
+        Column {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .background(Nocturne.Track)
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth(progress)
+                        .fillMaxHeight()
+                        .background(Nocturne.Accent)
+                )
+            }
+            Row(
+                Modifier.padding(start = 10.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(onClickLabel = "Ouvrir le lecteur", onClick = onOpen),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    FolderTile(track.folder, size = 44.dp, corner = 10.dp) { glyph ->
+                        Icon(painterResource(R.drawable.ic_music_note), contentDescription = null, tint = glyph, modifier = Modifier.size(20.dp))
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(track.title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (track.folder.isNotEmpty()) {
+                            Text(track.folder, fontSize = 13.sp, color = Nocturne.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+                PlayPauseButton(isPlaying = state.isPlaying, onClick = onTogglePlay, size = 48.dp, iconSize = 24.dp)
+                IconButton(onClick = onNext) {
+                    Icon(painterResource(R.drawable.ic_skip_next), contentDescription = "Suivant", tint = Nocturne.Text)
                 }
             }
         }
@@ -194,108 +478,124 @@ private fun TrackList(state: UiState, onClick: (Int) -> Unit) {
 }
 
 @Composable
-private fun PlayerBar(state: UiState, vm: PlayerViewModel) {
-    var position by remember { mutableLongStateOf(0L) }
-    var dragging by remember { mutableStateOf(false) }
-    var dragValue by remember { mutableFloatStateOf(0f) }
-
-    // Rafraîchit la position affichée.
-    LaunchedEffect(state.isPlaying, state.currentIndex) {
-        while (true) {
-            position = vm.positionMs()
-            if (!state.isPlaying) break
-            delay(500)
-        }
-    }
-
-    Surface(tonalElevation = 3.dp, shadowElevation = 8.dp) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        ) {
-            Text(
-                state.current?.title ?: "—",
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            val duration = state.durationMs.coerceAtLeast(1L)
-            Slider(
-                value = if (dragging) dragValue else (position.toFloat() / duration).coerceIn(0f, 1f),
-                onValueChange = { dragging = true; dragValue = it },
-                onValueChangeFinished = {
-                    val target = (dragValue * duration).toLong()
-                    vm.seekTo(target)
-                    position = target
-                    dragging = false
-                },
-                enabled = state.durationMs > 0,
-            )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                val shown = if (dragging) (dragValue * duration).toLong() else position
-                Text(formatTime(shown), style = MaterialTheme.typography.bodySmall)
-                Text(formatTime(state.durationMs), style = MaterialTheme.typography.bodySmall)
-            }
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(
-                    onClick = vm::toggleShuffle,
-                    colors = IconButtonDefaults.iconButtonColors(
-                        contentColor = if (state.shuffle) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    ),
-                ) {
-                    Icon(
-                        painterResource(R.drawable.ic_shuffle),
-                        contentDescription = if (state.shuffle) "Aléatoire activé" else "Aléatoire désactivé",
-                    )
-                }
-                IconButton(onClick = { vm.previous() }) {
-                    Icon(painterResource(R.drawable.ic_skip_previous), contentDescription = "Précédent")
-                }
-                FilledIconButton(onClick = vm::togglePlay, modifier = Modifier.size(56.dp)) {
-                    Icon(
-                        painterResource(if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
-                        contentDescription = if (state.isPlaying) "Pause" else "Lecture",
-                        modifier = Modifier.size(32.dp),
-                    )
-                }
-                IconButton(onClick = { vm.next() }) {
-                    Icon(painterResource(R.drawable.ic_skip_next), contentDescription = "Suivant")
-                }
-                val repeatOn = state.repeatMode != Player.REPEAT_MODE_OFF
-                IconButton(
-                    onClick = vm::cycleRepeat,
-                    colors = IconButtonDefaults.iconButtonColors(
-                        contentColor = if (repeatOn) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    ),
-                ) {
-                    Icon(
-                        painterResource(
-                            if (state.repeatMode == Player.REPEAT_MODE_ONE) R.drawable.ic_repeat_one else R.drawable.ic_repeat
-                        ),
-                        contentDescription = when (state.repeatMode) {
-                            Player.REPEAT_MODE_ONE -> "Relecture du morceau"
-                            Player.REPEAT_MODE_ALL -> "Relecture de la playlist"
-                            else -> "Pas de relecture"
-                        },
-                    )
-                }
-            }
-        }
+fun PlayPauseButton(isPlaying: Boolean, onClick: () -> Unit, size: Dp, iconSize: Dp) {
+    FilledIconButton(
+        onClick = onClick,
+        modifier = Modifier.size(size),
+        colors = IconButtonDefaults.filledIconButtonColors(
+            containerColor = Nocturne.Accent,
+            contentColor = Nocturne.OnAccent,
+        ),
+    ) {
+        Icon(
+            painterResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
+            contentDescription = if (isPlaying) "Pause" else "Lecture",
+            modifier = Modifier.size(iconSize),
+        )
     }
 }
 
-private fun formatTime(ms: Long): String {
-    val total = ms / 1000
-    val h = total / 3600
-    val m = (total % 3600) / 60
-    val s = total % 60
-    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+// ---------------------------------------------------------------------------
+// Premier lancement et messages
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun Onboarding(onPickFolder: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .systemBarsPadding()
+            .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 24.dp)
+    ) {
+        BrandLabel()
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(28.dp),
+            ) {
+                FolderBadge(size = 120.dp)
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Tu choisis un dossier.\nAudioma joue ta musique.",
+                        style = MaterialTheme.typography.displaySmall.copy(fontSize = 32.sp, lineHeight = 36.sp),
+                    )
+                    Text(
+                        "Les sous-dossiers sont inclus automatiquement. Tu peux changer de dossier à tout moment.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Nocturne.Muted,
+                    )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Promise("Aucune publicité, aucun compte")
+                    Promise("Rien ne quitte ton téléphone")
+                    Promise("MP3, FLAC, OGG, Opus, M4A, WAV…")
+                }
+            }
+        }
+        AccentButton("Choisir un dossier", onPickFolder, Modifier.fillMaxWidth())
+    }
+}
+
+@Composable
+private fun FolderBadge(size: Dp) {
+    Box(
+        Modifier
+            .size(size)
+            .clip(RoundedCornerShape(size * 0.27f))
+            .background(Nocturne.Surface),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val stroke = Stroke(1.5.dp.toPx())
+            listOf(0.28f, 0.40f).forEach { r ->
+                drawCircle(Nocturne.Accent.copy(alpha = 0.18f), radius = this.size.minDimension * r, style = stroke)
+            }
+        }
+        Icon(painterResource(R.drawable.ic_folder), contentDescription = null, tint = Nocturne.Accent, modifier = Modifier.size(size * 0.4f))
+    }
+}
+
+@Composable
+private fun Promise(text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(
+            Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(Nocturne.Accent)
+        )
+        Text(text, fontSize = 14.sp, color = Nocturne.TextSoft)
+    }
+}
+
+@Composable
+private fun AccentButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Button(
+        onClick = onClick,
+        modifier = modifier.height(56.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Nocturne.Accent, contentColor = Nocturne.OnAccent),
+        contentPadding = PaddingValues(horizontal = 24.dp),
+    ) {
+        Icon(painterResource(R.drawable.ic_folder), contentDescription = null, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun Message(text: String, action: String, onAction: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+        modifier = Modifier.padding(24.dp),
+    ) {
+        FolderBadge(size = 88.dp)
+        Text(text, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge, color = Nocturne.TextSoft)
+        AccentButton(action, onAction)
+    }
 }
