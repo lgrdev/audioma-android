@@ -12,8 +12,8 @@ android {
         applicationId = "app.audioma"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.4"
         // Appli en français : on ne garde que les traductions françaises des bibliothèques (APK plus léger).
         resourceConfigurations += listOf("fr")
     }
