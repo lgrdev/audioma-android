@@ -18,6 +18,8 @@ La plupart des lecteurs audio gratuits sont remplis de publicités, de bannière
 
 - 🎨 **Interface sombre et lisible** : morceaux groupés par sous-dossier, mini-lecteur en bas de la liste, lecteur plein écran avec le morceau suivant.
 - 📁 **Dossier au choix** : tu choisis un dossier une fois, les sous-dossiers sont inclus automatiquement.
+- 🔎 **Recherche** : une loupe pour retrouver un morceau par son titre ou son sous-dossier, sans se soucier des accents ni des majuscules.
+- 🎚️ **Égaliseur** : un bouton dans le lecteur ouvre l'égaliseur du téléphone (s'il en a un).
 - 🔁 **Relecture** : un bouton pour choisir entre pas de relecture, le morceau en boucle ou toute la playlist en boucle.
 - 🔀 **Lecture aléatoire** : un nouveau mélange à chaque tour, sans répéter un morceau avant que les autres soient passés.
 - 🌙 **Lecture en arrière-plan** : la musique continue écran éteint, avec les commandes dans la notification, sur l'écran de verrouillage et sur les appareils Bluetooth.

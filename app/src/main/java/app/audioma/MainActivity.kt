@@ -1,5 +1,6 @@
 package app.audioma
 
+import android.content.ActivityNotFoundException
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -36,6 +37,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -46,6 +48,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -71,12 +76,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -84,6 +97,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import java.text.Normalizer
 
 class MainActivity : ComponentActivity() {
     private val vm: PlayerViewModel by viewModels()
@@ -111,7 +125,10 @@ private fun AppRoot(vm: PlayerViewModel) {
     var playerRequested by rememberSaveable { mutableStateOf(false) }
     val playerOpen = playerRequested && state.current != null
 
-    BackHandler(enabled = playerOpen) { playerRequested = false }
+    // Égaliseur du téléphone, s'il en propose un.
+    val context = LocalContext.current
+    val hasEqualizer = remember { SystemEqualizer.isAvailable(context) }
+    val equalizer = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {}
 
     Box(
         Modifier
@@ -145,6 +162,12 @@ private fun AppRoot(vm: PlayerViewModel) {
                     position.longValue = target
                 },
                 onClose = { playerRequested = false },
+                onEqualizer = if (hasEqualizer) {
+                    {
+                        val intent = SystemEqualizer.panelIntent(context, PlaybackService.audioSessionId)
+                        try { equalizer.launch(intent) } catch (_: ActivityNotFoundException) {}
+                    }
+                } else null,
             )
         }
     }
@@ -176,13 +199,27 @@ private fun Library(
     onPickFolder: () -> Unit,
     onOpenPlayer: () -> Unit,
 ) {
+    var searching by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+    val closeSearch = { searching = false; query = "" }
+    BackHandler(enabled = searching, onBack = closeSearch)
+
+    // Pistes affichées : toutes, ou celles qui contiennent chaque mot cherché (titre ou sous-dossier).
+    val keys = remember(state.tracks) { state.tracks.map { searchKey("${it.title} ${it.folder}") } }
+    val shown = remember(state.tracks, keys, query) {
+        val words = searchKey(query).split(' ').filter(String::isNotEmpty)
+        state.tracks.withIndex().filter { (i, _) -> words.all { it in keys[i] } }
+    }
+
     Box(Modifier.fillMaxSize()) {
         Column(
             Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
+                .imePadding()
         ) {
-            LibraryHeader(state, vm, onPickFolder)
+            if (searching) SearchBar(query, onQueryChange = { query = it }, onClose = closeSearch)
+            else LibraryHeader(state, vm, onPickFolder, onSearch = { searching = true })
             Box(
                 Modifier
                     .weight(1f)
@@ -193,7 +230,14 @@ private fun Library(
                     state.scanning -> CircularProgressIndicator(color = Nocturne.Accent)
                     state.error != null -> Message(state.error, "Choisir un autre dossier", onPickFolder)
                     state.tracks.isEmpty() -> Message("Aucun fichier audio dans ce dossier", "Choisir un autre dossier", onPickFolder)
-                    else -> TrackList(state, onClick = vm::playAt)
+                    shown.isEmpty() -> Text(
+                        "Aucun morceau ne correspond à « ${query.trim()} »",
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Nocturne.Muted,
+                        modifier = Modifier.padding(24.dp),
+                    )
+                    else -> TrackList(state, shown, filtered = query.isNotBlank(), onClick = vm::playAt)
                 }
             }
         }
@@ -220,7 +264,7 @@ private fun BrandLabel(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun LibraryHeader(state: UiState, vm: PlayerViewModel, onPickFolder: () -> Unit) {
+private fun LibraryHeader(state: UiState, vm: PlayerViewModel, onPickFolder: () -> Unit, onSearch: () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -229,6 +273,11 @@ private fun LibraryHeader(state: UiState, vm: PlayerViewModel, onPickFolder: () 
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             BrandLabel(Modifier.weight(1f))
+            if (state.tracks.isNotEmpty()) {
+                IconButton(onClick = onSearch) {
+                    Icon(painterResource(R.drawable.ic_search), contentDescription = "Rechercher", tint = Nocturne.TextSoft)
+                }
+            }
             IconButton(onClick = vm::rescan) {
                 Icon(painterResource(R.drawable.ic_refresh), contentDescription = "Relire le dossier", tint = Nocturne.TextSoft)
             }
@@ -255,6 +304,61 @@ private fun LibraryHeader(state: UiState, vm: PlayerViewModel, onPickFolder: () 
         }
         if (state.tracks.isNotEmpty()) {
             ShuffleChip(on = state.shuffle, onToggle = vm::toggleShuffle)
+        }
+    }
+}
+
+/** Minuscules sans accents : « electro » trouve « Électro ». */
+private fun searchKey(text: String): String =
+    Normalizer.normalize(text, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "").lowercase()
+
+@Composable
+private fun SearchBar(query: String, onQueryChange: (String) -> Unit, onClose: () -> Unit) {
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        IconButton(onClick = onClose) {
+            Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Fermer la recherche", tint = Nocturne.TextSoft)
+        }
+        Row(
+            Modifier
+                .weight(1f)
+                .height(52.dp)
+                .clip(CircleShape)
+                .background(Nocturne.Surface)
+                .padding(start = 16.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(painterResource(R.drawable.ic_search), contentDescription = null, tint = Nocturne.Muted, modifier = Modifier.size(20.dp))
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                if (query.isEmpty()) Text("Rechercher un morceau", fontSize = 16.sp, color = Nocturne.Muted)
+                BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    singleLine = true,
+                    textStyle = TextStyle(fontSize = 16.sp, color = Nocturne.Text),
+                    cursorBrush = SolidColor(Nocturne.Accent),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focus)
+                        .semantics { contentDescription = "Rechercher un morceau" },
+                )
+            }
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(painterResource(R.drawable.ic_close), contentDescription = "Effacer", tint = Nocturne.TextSoft)
+                }
+            }
         }
     }
 }
@@ -290,12 +394,21 @@ private fun ShuffleChip(on: Boolean, onToggle: () -> Unit) {
 }
 
 @Composable
-private fun TrackList(state: UiState, onClick: (Int) -> Unit) {
+private fun TrackList(
+    state: UiState,
+    /** Pistes à afficher, avec leur position dans la liste complète. */
+    items: List<IndexedValue<Track>>,
+    filtered: Boolean,
+    onClick: (Int) -> Unit,
+) {
     val listState = rememberLazyListState()
-    // Amène la piste en cours à l'écran quand elle change et n'est pas visible.
-    LaunchedEffect(state.currentIndex) {
+    val keyboard = LocalSoftwareKeyboardController.current
+    // Nouvelle recherche : on repart du haut des résultats.
+    LaunchedEffect(items) { if (filtered) listState.scrollToItem(0) }
+    // Amène la piste en cours à l'écran quand elle change et n'est pas visible (liste complète seulement).
+    LaunchedEffect(state.currentIndex, filtered) {
         val i = state.currentIndex
-        if (i < 0) return@LaunchedEffect
+        if (i < 0 || filtered) return@LaunchedEffect
         val visible = listState.layoutInfo.visibleItemsInfo
         if (visible.none { it.index == i }) listState.scrollToItem((i - 2).coerceAtLeast(0))
     }
@@ -306,9 +419,9 @@ private fun TrackList(state: UiState, onClick: (Int) -> Unit) {
         // Laisse la dernière piste visible au-dessus du mini-lecteur.
         contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 120.dp),
     ) {
-        itemsIndexed(state.tracks, key = { _, t -> t.id }) { index, track ->
+        itemsIndexed(items, key = { _, t -> t.value.id }) { pos, (index, track) ->
             Column {
-                if (grouped && (index == 0 || state.tracks[index - 1].folder != track.folder)) {
+                if (grouped && (pos == 0 || items[pos - 1].value.folder != track.folder)) {
                     Text(
                         track.folder.ifEmpty { state.folderName.orEmpty() }.uppercase(),
                         style = MaterialTheme.typography.labelMedium,
@@ -322,7 +435,10 @@ private fun TrackList(state: UiState, onClick: (Int) -> Unit) {
                     track = track,
                     isCurrent = index == state.currentIndex,
                     isPlaying = state.isPlaying,
-                    onClick = { onClick(index) },
+                    onClick = {
+                        keyboard?.hide()
+                        onClick(index)
+                    },
                 )
             }
         }

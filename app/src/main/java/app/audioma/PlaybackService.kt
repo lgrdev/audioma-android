@@ -25,6 +25,13 @@ import kotlin.random.Random
  */
 class PlaybackService : MediaSessionService() {
 
+    companion object {
+        /** Session audio du lecteur, lue par l'écran pour ouvrir l'égaliseur (même processus). */
+        @Volatile
+        var audioSessionId: Int = C.AUDIO_SESSION_ID_UNSET
+            private set
+    }
+
     private var session: MediaSession? = null
     private lateinit var player: ExoPlayer
     private lateinit var prefs: Prefs
@@ -54,6 +61,7 @@ class PlaybackService : MediaSessionService() {
             .build()
         player.repeatMode = prefs.repeatMode // aucune, morceau ou playlist en boucle
         player.addListener(listener)
+        openAudioSession(player.audioSessionId)
 
         val openApp = PendingIntent.getActivity(
             this, 0,
@@ -79,12 +87,25 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         handler.removeCallbacks(saveTicker)
         saveProgress()
+        closeAudioSession()
         session?.run {
             player.release()
             release()
         }
         session = null
         super.onDestroy()
+    }
+
+    private fun openAudioSession(id: Int) {
+        if (id == C.AUDIO_SESSION_ID_UNSET) return
+        audioSessionId = id
+        SystemEqualizer.announce(this, id, open = true)
+    }
+
+    private fun closeAudioSession() {
+        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        SystemEqualizer.announce(this, audioSessionId, open = false)
+        audioSessionId = C.AUDIO_SESSION_ID_UNSET
     }
 
     private fun saveProgress() {
@@ -134,6 +155,11 @@ class PlaybackService : MediaSessionService() {
             ) reshuffle()
             previousIndex = player.currentMediaItemIndex
             mediaItem?.let { prefs.saveProgress(it.mediaId, 0L) }
+        }
+
+        override fun onAudioSessionIdChanged(audioSessionId: Int) {
+            closeAudioSession()
+            openAudioSession(audioSessionId)
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {

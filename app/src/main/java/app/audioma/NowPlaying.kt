@@ -1,5 +1,6 @@
 package app.audioma
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -61,8 +62,11 @@ fun NowPlaying(
     vm: PlayerViewModel,
     onSeek: (Long) -> Unit,
     onClose: () -> Unit,
+    /** Ouvre l'égaliseur du téléphone ; null s'il n'y en a pas. */
+    onEqualizer: (() -> Unit)?,
 ) {
     val track = state.current ?: return
+    BackHandler(onBack = onClose)
     // Glisser vers le bas ferme l'écran.
     var dragOffset by remember { mutableFloatStateOf(0f) }
     val dragState = rememberDraggableState { dy -> dragOffset = (dragOffset + dy).coerceAtLeast(0f) }
@@ -84,7 +88,7 @@ fun NowPlaying(
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        TopBar(folderName, track.folder, onClose)
+        TopBar(folderName, track.folder, onClose, onEqualizer)
 
         Box(
             Modifier
@@ -130,17 +134,9 @@ fun NowPlaying(
 }
 
 @Composable
-private fun TopBar(folderName: String?, subfolder: String, onClose: () -> Unit) {
+private fun TopBar(folderName: String?, subfolder: String, onClose: () -> Unit, onEqualizer: (() -> Unit)?) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        FilledIconButton(
-            onClick = onClose,
-            colors = IconButtonDefaults.filledIconButtonColors(
-                containerColor = Nocturne.Surface,
-                contentColor = Nocturne.TextSoft,
-            ),
-        ) {
-            Icon(painterResource(R.drawable.ic_expand_more), contentDescription = "Fermer le lecteur")
-        }
+        RoundButton(R.drawable.ic_expand_more, "Fermer le lecteur", onClose)
         Column(
             Modifier
                 .weight(1f)
@@ -156,7 +152,21 @@ private fun TopBar(folderName: String?, subfolder: String, onClose: () -> Unit) 
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Spacer(Modifier.width(48.dp))
+        if (onEqualizer != null) RoundButton(R.drawable.ic_equalizer, "Égaliseur", onEqualizer)
+        else Spacer(Modifier.width(48.dp))
+    }
+}
+
+@Composable
+private fun RoundButton(icon: Int, description: String, onClick: () -> Unit) {
+    FilledIconButton(
+        onClick = onClick,
+        colors = IconButtonDefaults.filledIconButtonColors(
+            containerColor = Nocturne.Surface,
+            contentColor = Nocturne.TextSoft,
+        ),
+    ) {
+        Icon(painterResource(icon), contentDescription = description)
     }
 }
 

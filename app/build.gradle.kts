@@ -14,6 +14,8 @@ android {
         targetSdk = 35
         versionCode = 4
         versionName = "1.3"
+        // Appli en français : on ne garde que les traductions françaises des bibliothèques (APK plus léger).
+        resourceConfigurations += listOf("fr")
     }
 
     // Clé de release lue depuis ~/.gradle/gradle.properties (hors dépôt) :
